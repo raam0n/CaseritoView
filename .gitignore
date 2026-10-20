@@ -1,0 +1,31 @@
+# Base de datos SQLite local (contiene notas personales y datos cacheados)
+*.db
+*.sqlite
+*.sqlite3
+caseritoview.db
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Archivos del sistema y del editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs y temporales
+*.log
+scratch/

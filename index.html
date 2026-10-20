@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CaseritoView Pro — Análisis Técnico Local</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Librería oficial TradingView Lightweight Charts (v4.2.1) vía CDN -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- BARRA LATERAL IZQUIERDA -->
+    <aside class="sidebar" id="app-sidebar">
+      <div class="brand-header">
+        <div class="brand-title">
+          <span class="brand-dot"></span>
+          <h1>CaseritoView</h1>
+        </div>
+        <span id="cache-badge" class="badge">SQLite</span>
+      </div>
+
+      <!-- Listado de Tickers (Watchlist de 19 activos + buscador) -->
+      <section class="sidebar-section watchlist-section" id="watchlist-section">
+        <div class="section-header">
+          <h2>Watchlist (A–Z)</h2>
+          <form id="custom-ticker-form" class="custom-ticker-form" title="Agregar o consultar cualquier ticker de Yahoo Finance">
+            <input
+              type="text"
+              id="custom-ticker-input"
+              placeholder="+ Ticker"
+              autocomplete="off"
+            />
+            <button type="submit">+</button>
+          </form>
+        </div>
+
+        <!-- Barra de búsqueda rápida para filtrar la Watchlist -->
+        <div class="watchlist-search-box">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="ticker-search-input"
+            placeholder="Buscar papel en la lista..."
+            autocomplete="off"
+          />
+          <button
+            type="button"
+            id="btn-clear-search"
+            class="btn-clear-search hidden"
+            title="Limpiar búsqueda"
+          >
+            ✕
+          </button>
+        </div>
+
+        <ul id="ticker-list" class="ticker-list">
+          <!-- Cargado dinámicamente desde GET /api/tickers -->
+        </ul>
+      </section>
+
+      <!-- Divisor arrastrable: estira o achica la Watchlist respecto a las secciones inferiores -->
+      <div
+        class="section-resizer"
+        id="resizer-watchlist"
+        title="Arrastrá hacia arriba o abajo para agrandar o achicar la Watchlist"
+      ></div>
+
+      <!-- Lista de Dibujos Activos del Ticker (Horizontales, Tendencias y Fibonacci) -->
+      <section class="sidebar-section drawings-section" id="drawings-section">
+        <div class="section-header">
+          <h2>Dibujos Activos</h2>
+          <span id="drawings-count" class="count-pill">0</span>
+        </div>
+        <ul id="drawings-list" class="drawings-list">
+          <li class="empty-hint">Sin dibujos activos en este ticker</li>
+        </ul>
+      </section>
+
+      <!-- Divisor arrastrable entre Dibujos Activos y Bitácora -->
+      <div
+        class="section-resizer"
+        id="resizer-drawings"
+        title="Arrastrá hacia arriba o abajo para ajustar el tamaño de Dibujos Activos y Bitácora"
+      ></div>
+
+      <!-- Cuadro de Notas / Bitácora por Ticker -->
+      <section class="sidebar-section notes-section" id="notes-section">
+        <div class="section-header">
+          <h2>Bitácora — <span id="notes-ticker-label">---</span></h2>
+          <span id="save-status" class="save-status">Sincronizado</span>
+        </div>
+        <textarea
+          id="ticker-notes"
+          placeholder="Escribí acá tus notas de análisis, tesis de inversión, zonas de entrada/salida o alertas para este ticker..."
+        ></textarea>
+        <button id="btn-save-notes" class="btn-save-notes">Guardar Notas</button>
+      </section>
+
+      <!-- Divisor lateral para ajustar el ancho de la barra izquierda -->
+      <div
+        class="sidebar-width-resizer"
+        id="sidebar-width-resizer"
+        title="Arrastrá hacia los lados para ajustar el ancho del panel izquierdo"
+      ></div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL (BARRA SUPERIOR + GRÁFICO DE VELAS + SUB-GRÁFICO RSI) -->
+    <main class="main-area">
+      <!-- Barra Superior de Herramientas, Temporalidades e Indicadores -->
+      <header class="toolbar">
+        <!-- Ticker Activo + Selector de Temporalidad (1D, 1W, 1M) + Full Sync -->
+        <div class="toolbar-group ticker-info">
+          <span id="active-ticker-title" class="active-ticker">Cargando...</span>
+
+          <div class="timeframe-group" role="group" aria-label="Temporalidad">
+            <button type="button" class="tf-btn active" data-tf="1D" title="Gráfico Diario">1D</button>
+            <button type="button" class="tf-btn" data-tf="1W" title="Gráfico Semanal (W-FRI)">1W</button>
+            <button type="button" class="tf-btn" data-tf="1M" title="Gráfico Mensual (ME)">1M</button>
+          </div>
+
+          <button id="btn-full-sync" class="tool-btn sync-btn" title="Borrar caché de precios de este ticker y volver a descargar 10 años limpios (anti-splits/dividendos)">
+            🔄 Sync Completo
+          </button>
+        </div>
+
+        <!-- Herramientas de Dibujo -->
+        <div class="toolbar-group drawing-tools">
+          <button id="btn-mode-cursor" class="tool-btn active" title="Modo navegación y selección (click sobre cualquier dibujo para editar o borrar)">
+            ↖ Cursor
+          </button>
+          <button id="btn-mode-trendline" class="tool-btn" title="Hacé click en el punto inicial y luego en el punto final">
+            ╱ Tendencia
+          </button>
+          <button id="btn-mode-horizontal" class="tool-btn" title="Hacé click en el gráfico para trazar un soporte o resistencia horizontal">
+            ― Horizontal
+          </button>
+          <button id="btn-mode-fibonacci" class="tool-btn" title="Retroceso de Fibonacci: 1er click inicio del impulso (P1), 2do click fin del impulso (P2)">
+            📐 Modo Fibonacci
+          </button>
+          <button id="btn-mode-measure" class="tool-btn" title="Regla de Medición: 1er click punto inicial, 2do click punto final para medir variación porcentual (+/- %), diferencia en USD y velas transcurridas">
+            📏 Regla / Medir
+          </button>
+          <button id="btn-clear-all" class="tool-btn danger-btn" title="Borrar todos los dibujos de este ticker">
+            🗑 Borrar Todo
+          </button>
+        </div>
+
+        <!-- Presets y Checkboxes de Medias Móviles -->
+        <div class="toolbar-group indicators-toggle">
+          <div class="preset-group">
+            <button type="button" id="btn-preset-swing" class="preset-btn" title="Activar solo EMA 9, EMA 21 y EMA 50">
+              ⚡ Vista Swing
+            </button>
+            <button type="button" id="btn-preset-positional" class="preset-btn" title="Activar solo EMA 50, EMA 200 y WMA 200">
+              🏛️ Vista Posicional
+            </button>
+          </div>
+
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-ema9" checked />
+            <span class="color-swatch swatch-ema9"></span>
+            EMA 9
+          </label>
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-ema21" checked />
+            <span class="color-swatch swatch-ema21"></span>
+            EMA 21
+          </label>
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-ema50" checked />
+            <span class="color-swatch swatch-ema50"></span>
+            EMA 50
+          </label>
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-ema100" checked />
+            <span class="color-swatch swatch-ema100"></span>
+            EMA 100
+          </label>
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-ema200" checked />
+            <span class="color-swatch swatch-ema200"></span>
+            EMA 200
+          </label>
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-sma200" checked />
+            <span class="color-swatch swatch-sma200"></span>
+            SMA 200
+          </label>
+          <label class="indicator-check">
+            <input type="checkbox" id="toggle-wma200" checked />
+            <span class="color-swatch swatch-wma200"></span>
+            WMA 200
+          </label>
+        </div>
+      </header>
+
+      <!-- Pila de Gráficos: 75% Velas + Indicadores / 25% RSI (14) Sincronizado -->
+      <div class="charts-stack">
+        <!-- PANEL SUPERIOR (75%): GRÁFICO PRINCIPAL -->
+        <div class="chart-wrapper main-chart-pane">
+          <div id="chart-legend" class="chart-legend">
+            <span id="legend-ohlc">Pasá el mouse sobre las velas para ver OHLC e indicadores</span>
+          </div>
+          <div id="drawing-hint" class="drawing-hint hidden"></div>
+
+          <!-- Barra flotante de edición al seleccionar una línea o Fibonacci -->
+          <div id="selected-drawing-bar" class="selected-drawing-bar hidden">
+            <span class="floating-drag-handle" id="selected-bar-drag-handle" title="Arrastrar barra flotante">⠿</span>
+            <span id="selected-drawing-type" class="selected-drawing-type">Dibujo</span>
+
+            <!-- Selector de color rápido -->
+            <div class="color-picker-group" id="drawing-color-picker">
+              <button type="button" class="color-dot" data-color="#22c55e" style="background:#22c55e" title="Verde"></button>
+              <button type="button" class="color-dot" data-color="#2962ff" style="background:#2962ff" title="Azul"></button>
+              <button type="button" class="color-dot" data-color="#eab308" style="background:#eab308" title="Dorado"></button>
+              <button type="button" class="color-dot" data-color="#f59e0b" style="background:#f59e0b" title="Naranja"></button>
+              <button type="button" class="color-dot" data-color="#ef4444" style="background:#ef4444" title="Rojo"></button>
+              <button type="button" class="color-dot" data-color="#a855f7" style="background:#a855f7" title="Violeta"></button>
+              <button type="button" class="color-dot" data-color="#e2e8f0" style="background:#e2e8f0" title="Blanco"></button>
+            </div>
+
+            <!-- Campos de edición para Línea Horizontal -->
+            <div id="edit-horizontal-fields" class="edit-fields-group hidden">
+              <label>Precio:
+                <input type="number" step="0.01" id="edit-horiz-price" class="edit-input-num" />
+              </label>
+              <label>Etiqueta:
+                <input type="text" id="edit-horiz-title" class="edit-input-text" maxlength="18" placeholder="S/R" />
+              </label>
+            </div>
+
+            <!-- Campos de edición para Línea de Tendencia o Fibonacci -->
+            <div id="edit-trendline-fields" class="edit-fields-group hidden">
+              <label>P1 ($):
+                <input type="number" step="0.01" id="edit-trend-p1" class="edit-input-num" />
+              </label>
+              <label>P2 ($):
+                <input type="number" step="0.01" id="edit-trend-p2" class="edit-input-num" />
+              </label>
+            </div>
+
+            <button type="button" id="btn-delete-selected" class="btn-delete-selected" title="Eliminar este dibujo (Tecla Supr)">
+              🗑 Eliminar
+            </button>
+            <button type="button" id="btn-close-selected" class="btn-close-selected" title="Deseleccionar (Esc)">
+              ✕
+            </button>
+          </div>
+
+          <!-- Contenedor principal de Lightweight Charts -->
+          <div id="chart-container" class="chart-container"></div>
+
+          <!-- Capa vectorial SVG para tendencias, retrocesos de Fibonacci y puntos de control -->
+          <svg id="handles-overlay" class="handles-overlay"></svg>
+        </div>
+
+        <!-- PANEL INFERIOR (25%): SUB-GRÁFICO SINCRONIZADO DE RSI (14) -->
+        <div class="rsi-chart-pane">
+          <div class="rsi-legend">
+            <span class="rsi-title">RSI (14, Wilder)</span>
+            <span id="legend-rsi-value" class="rsi-value">—</span>
+            <span class="rsi-levels-hint">Sobrec. 70 · Neutral 50 · Sobrev. 30</span>
+          </div>
+          <div id="rsi-chart-container" class="rsi-chart-container"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
